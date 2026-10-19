@@ -20,23 +20,34 @@ jobs:
       - name: Extract source archive
         run: |
           Expand-Archive -Path "DevilsFPS-GitHub-Source-v5.zip" -DestinationPath "src" -Force
-          Get-ChildItem -Recurse -Filter *.csproj | Select-Object FullName
+          Get-ChildItem -Path src -Recurse -Filter *.csproj | Select-Object FullName
 
       - name: Install .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore dependencies
+      - name: Locate project file
+        id: locate
+        shell: pwsh
         run: |
           $csproj = Get-ChildItem -Path src -Recurse -Filter "DevilsFPS.Launcher.csproj" | Select-Object -First 1
           if (-not $csproj) { throw "DevilsFPS.Launcher.csproj not found in extracted archive" }
-          dotnet restore $csproj.FullName
+          Write-Host "Found project: $($csproj.FullName)"
+          "path=$($csproj.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Clean previous build artifacts
+        shell: pwsh
+        run: dotnet clean "${{ steps.locate.outputs.path }}" --configuration Release
+
+      - name: Restore dependencies
+        shell: pwsh
+        run: dotnet restore "${{ steps.locate.outputs.path }}" --runtime win-x64
 
       - name: Publish Windows executable
+        shell: pwsh
         run: |
-          $csproj = Get-ChildItem -Path src -Recurse -Filter "DevilsFPS.Launcher.csproj" | Select-Object -First 1
-          dotnet publish $csproj.FullName `
+          dotnet publish "${{ steps.locate.outputs.path }}" `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
